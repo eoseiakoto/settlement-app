@@ -1,4 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts';
 import { getCurrencyRates, getMarketRates } from '../utils/api';
 import DataTable from '../components/DataTable';
 import { DollarSign, TrendingUp, RefreshCw, ArrowLeftRight, Globe, Shield, ArrowRight } from 'lucide-react';
@@ -41,7 +45,7 @@ const CURRENCY_MAP = {
   '980': 'UAH', '981': 'GEL', '985': 'PLN', '986': 'BRL',
 };
 
-/* ── Accent colour palette (matches Dashboard.jsx) ── */
+/* ── Accent colours ── */
 const ACCENT = {
   blue:   { bg: 'rgba(37,99,235,0.12)',  ring: 'rgba(37,99,235,0.22)',  text: '#1d4ed8', fill: '#2563eb' },
   green:  { bg: 'rgba(5,150,105,0.12)',   ring: 'rgba(5,150,105,0.22)',  text: '#047857', fill: '#059669' },
@@ -64,14 +68,15 @@ const CURRENCY_NAMES = {
   RON: 'Romanian Leu', BGN: 'Bulgarian Lev', ISK: 'Icelandic Krona',
 };
 
-function currencyLabel(code) {
-  return CURRENCY_MAP[code] || code;
-}
+/* ── Preferred currencies shown at top of dropdown ── */
+const PREFERRED_CURRENCIES = [
+  'USD', 'EUR', 'GBP', 'GHS', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR',
+  'AED', 'SAR', 'NGN', 'ZAR', 'KES', 'BRL', 'MXN', 'SGD', 'HKD',
+];
+
+function currencyLabel(code) { return CURRENCY_MAP[code] || code; }
 
 function parseVisaRate(rawRate) {
-  // Visa EP-756 "SCL FACT & RATE" encoding:
-  // 8-character field = 2-digit exponent + 6-digit mantissa
-  // Rate (counter per base) = 10^exponent / mantissa
   if (!rawRate || typeof rawRate !== 'string' || rawRate.length < 8) return 0;
   const exponent = parseInt(rawRate.substring(0, 2), 10);
   const mantissa = parseInt(rawRate.substring(2), 10);
@@ -79,32 +84,43 @@ function parseVisaRate(rawRate) {
   return Math.pow(10, exponent) / mantissa;
 }
 
-/* ── Preferred currencies shown at top of dropdown ── */
-const PREFERRED_CURRENCIES = [
-  'USD', 'EUR', 'GBP', 'GHS', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR',
-  'AED', 'SAR', 'NGN', 'ZAR', 'KES', 'BRL', 'MXN', 'SGD', 'HKD',
-];
+/* ── Glass tooltip for charts ── */
+function GlassTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="glass-strong" style={{
+      borderRadius: '0.75rem', padding: '0.75rem 1rem',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.08)', border: '1px solid rgba(0,0,0,0.06)',
+    }}>
+      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#111827', marginBottom: '0.25rem' }}>{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ fontSize: '0.6875rem', fontWeight: 500, color: '#4b5563', margin: '0.125rem 0' }}>
+          <span style={{ display: 'inline-block', width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: p.color, marginRight: '0.375rem', verticalAlign: 'middle' }} />
+          {p.name}: {typeof p.value === 'number' ? formatNumber(p.value, 4) : p.value}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 
+/* ═══════════════════════════════════════════════
+   MAIN COMPONENT
+   ═══════════════════════════════════════════════ */
 export default function CurrencyRates() {
-  /* ── Visa settlement rates state ── */
   const [ratesData, setRatesData] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  /* ── Live market rates state ── */
   const [marketRates, setMarketRates] = useState(null);
   const [marketLoading, setMarketLoading] = useState(false);
   const [marketError, setMarketError] = useState(null);
   const [marketLastUpdated, setMarketLastUpdated] = useState(null);
-
-  /* ── Converter state ── */
   const [conversionFrom, setConversionFrom] = useState('USD');
   const [conversionTo, setConversionTo] = useState('GHS');
   const [conversionAmount, setConversionAmount] = useState(1000);
 
   /* ── Load Visa settlement rates ── */
   useEffect(() => {
-    const loadRates = async () => {
+    (async () => {
       setLoading(true);
       try {
         const data = await getCurrencyRates();
@@ -114,8 +130,7 @@ export default function CurrencyRates() {
       } finally {
         setLoading(false);
       }
-    };
-    loadRates();
+    })();
   }, []);
 
   /* ── Load live market rates ── */
@@ -131,7 +146,7 @@ export default function CurrencyRates() {
         setMarketError(data.error);
       }
     } catch (error) {
-      setMarketError('Unable to fetch live market rates. Please try again.');
+      setMarketError('Unable to fetch live rates.');
       console.warn('Market rates error:', error.message);
     } finally {
       setMarketLoading(false);
@@ -142,16 +157,15 @@ export default function CurrencyRates() {
     fetchMarketRates(conversionFrom);
   }, [conversionFrom, fetchMarketRates]);
 
-  /* ── Build dynamic currency list from market rates response ── */
-  const converterCurrencies = (() => {
+  /* ── Build deduplicated currency list ── */
+  const converterCurrencies = useMemo(() => {
     const available = marketRates?.rates ? Object.keys(marketRates.rates) : [];
-    // Always include the base currency
-    const allCodes = new Set([conversionFrom, ...PREFERRED_CURRENCIES, ...available]);
-    // Sort with preferred currencies first, then alphabetical
-    const preferred = PREFERRED_CURRENCIES.filter(c => allCodes.has(c));
-    const rest = [...allCodes].filter(c => !PREFERRED_CURRENCIES.includes(c)).sort();
+    const allCodes = [...new Set([conversionFrom, ...PREFERRED_CURRENCIES, ...available])];
+    // Split preferred (in order) vs rest (alphabetical)
+    const preferred = PREFERRED_CURRENCIES.filter(c => allCodes.includes(c));
+    const rest = allCodes.filter(c => !PREFERRED_CURRENCIES.includes(c)).sort();
     return [...preferred, ...rest];
-  })();
+  }, [marketRates, conversionFrom]);
 
   const marketSource = marketRates?.source || 'Open Exchange Rates';
 
@@ -161,37 +175,69 @@ export default function CurrencyRates() {
   const hasRates = rates.length > 0;
   const settlementDate = header.cpd || header.processing_date || '—';
 
-  const rawRows = rates.map((r, i) => {
-    const buyRate = parseVisaRate(r.buy_rate);
-    const sellRate = parseVisaRate(r.sell_rate);
-    const fromAlpha = currencyLabel(r.base_currency || '');
-    const toAlpha = currencyLabel(r.counter_currency || '');
-    return {
-      id: i,
-      fromCurrency: fromAlpha,
-      toCurrency: toAlpha,
-      rate: buyRate,
-      sellRate: sellRate,
-      spread: buyRate && sellRate ? Math.abs(((buyRate - sellRate) / buyRate) * 100) : 0,
-      inverseRate: buyRate ? 1 / buyRate : 0,
-      effectiveDate: r.effective_date || settlementDate,
-      pairKey: `${fromAlpha}-${toAlpha}`,
-    };
-  });
+  const rateRows = useMemo(() => {
+    const rawRows = rates.map((r, i) => {
+      const buyRate = parseVisaRate(r.buy_rate);
+      const sellRate = parseVisaRate(r.sell_rate);
+      const fromAlpha = currencyLabel(r.base_currency || '');
+      const toAlpha = currencyLabel(r.counter_currency || '');
+      return {
+        id: i, fromCurrency: fromAlpha, toCurrency: toAlpha,
+        rate: buyRate, sellRate, pairKey: `${fromAlpha}-${toAlpha}`,
+        spread: buyRate && sellRate ? Math.abs(((buyRate - sellRate) / buyRate) * 100) : 0,
+        inverseRate: buyRate ? 1 / buyRate : 0,
+        effectiveDate: r.effective_date || settlementDate,
+      };
+    });
+    const seen = new Set();
+    return rawRows.filter(r => {
+      if (r.fromCurrency === r.toCurrency) return false;
+      if (seen.has(r.pairKey)) return false;
+      seen.add(r.pairKey);
+      return true;
+    });
+  }, [rates, settlementDate]);
 
-  const seen = new Set();
-  const rateRows = rawRows.filter(r => {
-    if (r.fromCurrency === r.toCurrency) return false;
-    if (seen.has(r.pairKey)) return false;
-    seen.add(r.pairKey);
-    return true;
-  });
+  /* ── Spotlight: major USD pairs ── */
+  const majorPairs = ['GHS', 'EUR', 'GBP', 'JPY', 'CHF', 'AED', 'INR', 'ZAR'];
+  const spotlightRates = rateRows
+    .filter(r => r.fromCurrency === 'USD' && majorPairs.includes(r.toCurrency))
+    .sort((a, b) => majorPairs.indexOf(a.toCurrency) - majorPairs.indexOf(b.toCurrency))
+    .slice(0, 8);
 
-  /* ── Live market conversion ── */
+  /* ── Spread comparison chart data (Visa buy vs sell for major pairs) ── */
+  const spreadChartData = useMemo(() => {
+    return spotlightRates.map(r => ({
+      pair: `${r.toCurrency}`,
+      'Buy Rate': r.rate,
+      'Sell Rate': r.sellRate,
+      'Spread %': r.spread,
+    }));
+  }, [spotlightRates]);
+
+  /* ── Visa vs Market rate comparison chart ── */
+  const comparisonChartData = useMemo(() => {
+    if (!marketRates?.rates) return [];
+    return spotlightRates
+      .filter(r => r.toCurrency !== 'JPY') // exclude JPY (different magnitude)
+      .map(r => {
+        const marketRate = marketRates.rates[r.toCurrency];
+        if (!marketRate) return null;
+        const markup = marketRate > 0 ? ((r.rate - marketRate) / marketRate * 100) : 0;
+        return {
+          pair: r.toCurrency,
+          'Visa Rate': r.rate,
+          'Market Rate': marketRate,
+          'Visa Markup %': Math.abs(markup),
+        };
+      })
+      .filter(Boolean);
+  }, [spotlightRates, marketRates]);
+
+  /* ── Converter logic ── */
   const marketConversionRate = marketRates?.rates?.[conversionTo] || null;
   const convertedAmount = marketConversionRate ? conversionAmount * marketConversionRate : null;
 
-  /* ── Swap currencies ── */
   const handleSwap = () => {
     setConversionFrom(conversionTo);
     setConversionTo(conversionFrom);
@@ -200,301 +246,274 @@ export default function CurrencyRates() {
   /* ── VSS rates table columns ── */
   const rateColumns = [
     {
-      key: 'fromCurrency',
-      label: 'Base Currency',
-      render: (val) => (
-        <span style={{ fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>{val}</span>
-      ),
+      key: 'fromCurrency', label: 'Base',
+      render: (val) => <span style={{ fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>{val}</span>,
     },
     {
-      key: 'toCurrency',
-      label: 'Counter Currency',
-      render: (val) => (
-        <span style={{ fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>{val}</span>
-      ),
+      key: 'toCurrency', label: 'Counter',
+      render: (val) => <span style={{ fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>{val}</span>,
     },
     {
-      key: 'rate',
-      label: 'Buy Rate',
-      render: (val) => val ? (
-        <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", color: '#047857', fontWeight: 600 }}>
-          {formatNumber(val, 6)}
-        </span>
-      ) : '—',
+      key: 'rate', label: 'Buy Rate',
+      render: (val) => val ? <span style={{ fontFamily: 'monospace', color: '#047857', fontWeight: 600 }}>{formatNumber(val, 6)}</span> : '—',
     },
     {
-      key: 'sellRate',
-      label: 'Sell Rate',
-      render: (val) => val ? (
-        <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", color: '#b45309', fontWeight: 600 }}>
-          {formatNumber(val, 6)}
-        </span>
-      ) : '—',
+      key: 'sellRate', label: 'Sell Rate',
+      render: (val) => val ? <span style={{ fontFamily: 'monospace', color: '#b45309', fontWeight: 600 }}>{formatNumber(val, 6)}</span> : '—',
     },
     {
-      key: 'spread',
-      label: 'Spread %',
-      render: (val) => val ? (
-        <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", color: '#6b7280', fontSize: '0.8rem' }}>
-          {val.toFixed(4)}%
-        </span>
-      ) : '—',
+      key: 'spread', label: 'Spread %',
+      render: (val) => val ? <span style={{ fontFamily: 'monospace', color: '#6b7280', fontSize: '0.8rem' }}>{val.toFixed(4)}%</span> : '—',
     },
     {
-      key: 'inverseRate',
-      label: 'Inverse',
-      render: (val) => val ? (
-        <span style={{ fontFamily: "'SF Mono', 'Fira Code', monospace", color: '#6b7280' }}>
-          {formatNumber(val, 6)}
-        </span>
-      ) : '—',
+      key: 'inverseRate', label: 'Inverse',
+      render: (val) => val ? <span style={{ fontFamily: 'monospace', color: '#6b7280' }}>{formatNumber(val, 6)}</span> : '—',
     },
   ];
-
-  /* ── Major rates spotlight cards ── */
-  const majorPairs = ['GHS', 'EUR', 'GBP', 'JPY', 'CHF', 'AED', 'INR', 'ZAR'];
-  const spotlightRates = rateRows
-    .filter(r => r.fromCurrency === 'USD' && majorPairs.includes(r.toCurrency))
-    .sort((a, b) => majorPairs.indexOf(a.toCurrency) - majorPairs.indexOf(b.toCurrency))
-    .slice(0, 8);
 
   const accentCycle = ['blue', 'green', 'purple', 'amber'];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div className="space-y-5 xl:space-y-6 w-full">
 
       {/* ══════════════ PAGE HEADER ══════════════ */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h2 style={{ fontSize: '1.625rem', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+          <h2 className="text-xl sm:text-2xl xl:text-[26px] font-extrabold tracking-tight" style={{ color: '#0f172a' }}>
             Currency Rates
           </h2>
-          <p style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.25rem' }}>
+          <p className="text-xs sm:text-sm mt-0.5" style={{ color: '#64748b' }}>
             Live market conversion &amp; Visa VSS settlement rates
           </p>
         </div>
         {hasRates && (
-          <div className="glass-subtle" style={{
-            padding: '0.375rem 0.875rem', borderRadius: '9999px',
-            fontSize: '0.75rem', fontWeight: 600, color: '#475569',
-          }}>
+          <div className="glass-subtle rounded-full px-3 py-1.5 text-[11px] font-semibold" style={{ color: '#475569' }}>
             {formatNumber(rateRows.length)} settlement rate pairs
           </div>
         )}
       </div>
 
-      {/* ══════════════ LIVE MARKET RATE CONVERTER ══════════════ */}
-      <div className="glass-strong" style={{ borderRadius: '1rem', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
-        {/* Subtle accent orb */}
-        <div style={{
-          position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px',
-          borderRadius: '50%', background: 'rgba(37,99,235,0.06)', filter: 'blur(40px)', pointerEvents: 'none',
-        }} />
+      {/* ══════════════ TWO-COLUMN: CONVERTER + RATE PATTERN ══════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 xl:gap-5">
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', position: 'relative' }}>
+        {/* ── LEFT: Live Market Rate Converter ── */}
+        <div className="glass-strong rounded-2xl p-5 xl:p-6 relative overflow-hidden">
           <div style={{
-            width: '2rem', height: '2rem', borderRadius: '0.625rem',
-            background: ACCENT.blue.bg, border: `1.5px solid ${ACCENT.blue.ring}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Globe style={{ width: '1rem', height: '1rem', color: ACCENT.blue.fill }} />
-          </div>
-          <div>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Live Market Rate Converter
-            </h3>
-            <p style={{ fontSize: '0.6875rem', color: '#94a3b8', margin: 0 }}>
-              Powered by {marketSource}
-              {marketLastUpdated && ` • Updated ${marketLastUpdated.toLocaleTimeString()}`}
-            </p>
-          </div>
-          <button
-            onClick={() => fetchMarketRates(conversionFrom)}
-            disabled={marketLoading}
-            style={{
-              marginLeft: 'auto', padding: '0.375rem', borderRadius: '0.5rem',
-              border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.2s',
-            }}
-            title="Refresh rates"
-          >
-            <RefreshCw style={{
-              width: '0.875rem', height: '0.875rem', color: '#64748b',
-              animation: marketLoading ? 'spin 1s linear infinite' : 'none',
-            }} />
-          </button>
-        </div>
+            position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px',
+            borderRadius: '50%', background: 'rgba(37,99,235,0.06)', filter: 'blur(40px)', pointerEvents: 'none',
+          }} />
 
-        {/* Converter Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
-          {/* From */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              From
-            </label>
-            <select
-              value={conversionFrom}
-              onChange={(e) => setConversionFrom(e.target.value)}
-              style={{
-                width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
-                border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem', fontWeight: 600, color: '#0f172a',
-                outline: 'none', cursor: 'pointer', appearance: 'auto',
-              }}
-            >
-              {converterCurrencies.map(c => (
-                <option key={c} value={c}>{c}{CURRENCY_NAMES[c] ? ` — ${CURRENCY_NAMES[c]}` : ''}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2 mb-4 relative z-10">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: ACCENT.blue.bg, border: `1.5px solid ${ACCENT.blue.ring}` }}>
+              <Globe className="w-4 h-4" style={{ color: ACCENT.blue.fill }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold" style={{ color: '#0f172a' }}>Live Market Converter</h3>
+              <p className="text-[10px]" style={{ color: '#94a3b8' }}>
+                {marketSource}{marketLastUpdated && ` • ${marketLastUpdated.toLocaleTimeString()}`}
+              </p>
+            </div>
+            <button onClick={() => fetchMarketRates(conversionFrom)} disabled={marketLoading}
+              className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-gray-100 transition-colors"
+              style={{ border: '1px solid rgba(0,0,0,0.08)' }} title="Refresh">
+              <RefreshCw className="w-3.5 h-3.5" style={{
+                color: '#64748b', animation: marketLoading ? 'spin 1s linear infinite' : 'none',
+              }} />
+            </button>
           </div>
 
-          {/* Swap button */}
-          <button
-            onClick={handleSwap}
-            style={{
-              width: '2.25rem', height: '2.25rem', borderRadius: '50%',
-              border: '1.5px solid rgba(37,99,235,0.25)', background: ACCENT.blue.bg,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: '0.125rem', transition: 'all 0.2s',
-            }}
-            title="Swap currencies"
-          >
-            <ArrowLeftRight style={{ width: '0.875rem', height: '0.875rem', color: ACCENT.blue.fill }} />
-          </button>
-
-          {/* To */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              To
-            </label>
-            <select
-              value={conversionTo}
-              onChange={(e) => setConversionTo(e.target.value)}
-              style={{
-                width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
-                border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem', fontWeight: 600, color: '#0f172a',
-                outline: 'none', cursor: 'pointer', appearance: 'auto',
-              }}
-            >
-              {converterCurrencies.map(c => (
-                <option key={c} value={c}>{c}{CURRENCY_NAMES[c] ? ` — ${CURRENCY_NAMES[c]}` : ''}</option>
-              ))}
-            </select>
+          {/* Currency selectors */}
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end mb-3">
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>From</label>
+              <select value={conversionFrom} onChange={(e) => setConversionFrom(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg text-sm font-semibold outline-none"
+                style={{ border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)', color: '#0f172a' }}>
+                {converterCurrencies.map(c => (
+                  <option key={c} value={c}>{c} — {CURRENCY_NAMES[c] || c}</option>
+                ))}
+              </select>
+            </div>
+            <button onClick={handleSwap} title="Swap"
+              className="w-8 h-8 rounded-full flex items-center justify-center mb-0.5"
+              style={{ border: '1.5px solid rgba(37,99,235,0.25)', background: ACCENT.blue.bg, cursor: 'pointer' }}>
+              <ArrowLeftRight className="w-3.5 h-3.5" style={{ color: ACCENT.blue.fill }} />
+            </button>
+            <div>
+              <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>To</label>
+              <select value={conversionTo} onChange={(e) => setConversionTo(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg text-sm font-semibold outline-none"
+                style={{ border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)', color: '#0f172a' }}>
+                {converterCurrencies.map(c => (
+                  <option key={c} value={c}>{c} — {CURRENCY_NAMES[c] || c}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Amount */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Amount
-            </label>
-            <input
-              type="number"
-              value={conversionAmount}
+          {/* Amount input */}
+          <div className="mb-4">
+            <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#64748b' }}>Amount</label>
+            <input type="number" value={conversionAmount}
               onChange={(e) => setConversionAmount(parseFloat(e.target.value) || 0)}
-              style={{
-                width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
-                border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', outline: 'none',
-              }}
+              className="w-full px-3 py-2.5 rounded-lg text-sm font-semibold outline-none"
+              style={{ border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)', color: '#0f172a' }}
             />
           </div>
+
+          {/* Conversion Result */}
+          {marketLoading ? (
+            <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)' }}>
+              <p className="text-sm" style={{ color: '#64748b' }}>Fetching live rates...</p>
+            </div>
+          ) : marketError ? (
+            <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)' }}>
+              <p className="text-sm" style={{ color: '#b91c1c' }}>{marketError}</p>
+            </div>
+          ) : conversionFrom === conversionTo ? (
+            <div className="rounded-xl p-5" style={{ background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)' }}>
+              <div className="flex justify-center items-center gap-4">
+                <div className="text-center">
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: '#64748b' }}>Amount</p>
+                  <p className="text-xl font-extrabold" style={{ color: '#0f172a' }}>
+                    {formatNumber(conversionAmount, 2)} <span className="text-sm" style={{ color: '#475569' }}>{conversionFrom}</span>
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4" style={{ color: '#94a3b8' }} />
+                <div className="text-center">
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: '#64748b' }}>Converted</p>
+                  <p className="text-xl font-extrabold" style={{ color: '#0f172a' }}>
+                    {formatNumber(conversionAmount, 2)} <span className="text-sm" style={{ color: '#475569' }}>{conversionTo}</span>
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-center mt-2" style={{ color: '#94a3b8' }}>Same currency — 1:1</p>
+            </div>
+          ) : marketConversionRate ? (
+            <div className="rounded-xl p-5" style={{
+              background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(5,150,105,0.04) 100%)',
+              border: '1px solid rgba(37,99,235,0.10)',
+            }}>
+              <div className="flex justify-center items-center gap-4">
+                <div className="text-center">
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: '#64748b' }}>Amount</p>
+                  <p className="text-xl font-extrabold" style={{ color: '#0f172a' }}>
+                    {formatNumber(conversionAmount, 2)} <span className="text-sm" style={{ color: '#475569' }}>{conversionFrom}</span>
+                  </p>
+                </div>
+                <ArrowRight className="w-4 h-4" style={{ color: ACCENT.blue.fill }} />
+                <div className="text-center">
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: '#64748b' }}>Converted</p>
+                  <p className="text-xl font-extrabold" style={{ color: ACCENT.green.text }}>
+                    {formatNumber(convertedAmount, 2)} <span className="text-sm" style={{ color: '#475569' }}>{conversionTo}</span>
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-center mt-2" style={{ color: '#64748b' }}>
+                1 {conversionFrom} = {formatNumber(marketConversionRate, 6)} {conversionTo}
+                <span style={{ color: '#94a3b8' }}> • {marketSource}</span>
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <p className="text-sm" style={{ color: '#94a3b8' }}>No rate available for {conversionFrom} → {conversionTo}</p>
+            </div>
+          )}
         </div>
 
-        {/* Conversion Result */}
-        {marketLoading ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
-            background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '0.8125rem', color: '#64748b', margin: 0 }}>Fetching live rates...</p>
+        {/* ── RIGHT: Exchange Rate Pattern ── */}
+        <div className="glass-strong rounded-2xl p-5 xl:p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: ACCENT.purple.bg, border: `1.5px solid ${ACCENT.purple.ring}` }}>
+              <TrendingUp className="w-4 h-4" style={{ color: ACCENT.purple.fill }} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold" style={{ color: '#0f172a' }}>Visa vs Market Rates</h3>
+              <p className="text-[10px]" style={{ color: '#94a3b8' }}>
+                Settlement rate markup over market rates (USD base)
+              </p>
+            </div>
           </div>
-        ) : marketError ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
-            background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '0.8125rem', color: '#b91c1c', margin: 0 }}>{marketError}</p>
-          </div>
-        ) : conversionFrom === conversionTo ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.5rem', borderRadius: '0.75rem',
-            background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Amount</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionFrom}</span>
+
+          {comparisonChartData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={comparisonChartData} barGap={2} barSize={18}>
+                  <defs>
+                    <linearGradient id="visaBar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.9} />
+                      <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.5} />
+                    </linearGradient>
+                    <linearGradient id="marketBar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#2563eb" stopOpacity={0.9} />
+                      <stop offset="100%" stopColor="#2563eb" stopOpacity={0.5} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+                  <XAxis dataKey="pair" axisLine={false} tickLine={false}
+                    tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 600 }} />
+                  <YAxis axisLine={false} tickLine={false}
+                    tick={{ fontSize: 10, fill: '#6b7280' }} width={50}
+                    tickFormatter={(v) => formatNumber(v, 2)} />
+                  <Tooltip content={<GlassTooltip />} cursor={{ fill: 'rgba(109,40,217,0.04)' }} />
+                  <Legend iconType="circle" iconSize={8}
+                    wrapperStyle={{ fontSize: '0.6875rem', fontWeight: 600 }} />
+                  <Bar dataKey="Visa Rate" fill="url(#visaBar)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Market Rate" fill="url(#marketBar)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Spread % mini chart below */}
+              <div className="mt-4 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>
+                  Buy vs Sell Spread (%)
                 </p>
+                <ResponsiveContainer width="100%" height={120}>
+                  <BarChart data={spreadChartData} barSize={24}>
+                    <defs>
+                      <linearGradient id="spreadBar" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#d97706" stopOpacity={0.85} />
+                        <stop offset="100%" stopColor="#d97706" stopOpacity={0.4} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.04)" vertical={false} />
+                    <XAxis dataKey="pair" axisLine={false} tickLine={false}
+                      tick={{ fontSize: 10, fill: '#6b7280', fontWeight: 600 }} />
+                    <YAxis axisLine={false} tickLine={false}
+                      tick={{ fontSize: 10, fill: '#9ca3af' }} width={35}
+                      tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                    <Tooltip content={<GlassTooltip />} cursor={{ fill: 'rgba(217,119,6,0.04)' }} />
+                    <Bar dataKey="Spread %" fill="url(#spreadBar)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <ArrowRight style={{ width: '1.25rem', height: '1.25rem', color: '#94a3b8' }} />
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Converted</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionTo}</span>
-                </p>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-[300px]" style={{ color: '#94a3b8' }}>
+              <div className="text-center">
+                <TrendingUp className="w-8 h-8 mx-auto mb-2" style={{ opacity: 0.3 }} />
+                <p className="text-sm">Loading rate comparison…</p>
               </div>
             </div>
-            <p style={{ fontSize: '0.6875rem', textAlign: 'center', color: '#94a3b8', marginTop: '0.75rem' }}>
-              Same currency — rate is 1:1
-            </p>
-          </div>
-        ) : marketConversionRate ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.5rem', borderRadius: '0.75rem',
-            background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(5,150,105,0.04) 100%)',
-            border: '1px solid rgba(37,99,235,0.10)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Amount</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionFrom}</span>
-                </p>
-              </div>
-              <ArrowRight style={{ width: '1.25rem', height: '1.25rem', color: ACCENT.blue.fill }} />
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Converted</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: ACCENT.green.text, margin: 0 }}>
-                  {formatNumber(convertedAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionTo}</span>
-                </p>
-              </div>
-            </div>
-            <p style={{ fontSize: '0.6875rem', textAlign: 'center', color: '#64748b', marginTop: '0.75rem' }}>
-              1 {conversionFrom} = {formatNumber(marketConversionRate, 6)} {conversionTo}
-              <span style={{ color: '#94a3b8' }}> • {marketSource}</span>
-            </p>
-          </div>
-        ) : (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
-            background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '0.8125rem', color: '#94a3b8', margin: 0 }}>
-              No market rate available for {conversionFrom} → {conversionTo}
-            </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ══════════════ VSS SETTLEMENT RATES SECTION ══════════════ */}
       {loading ? (
-        <div className="glass" style={{ borderRadius: '1rem', padding: '3rem', textAlign: 'center' }}>
-          <RefreshCw style={{ width: '1.5rem', height: '1.5rem', color: '#94a3b8', margin: '0 auto 0.75rem', animation: 'spin 1s linear infinite' }} />
-          <p style={{ fontSize: '0.875rem', color: '#64748b' }}>Loading settlement rates...</p>
+        <div className="glass rounded-2xl p-8 text-center">
+          <RefreshCw className="w-5 h-5 mx-auto mb-3" style={{ color: '#94a3b8', animation: 'spin 1s linear infinite' }} />
+          <p className="text-sm" style={{ color: '#64748b' }}>Loading settlement rates...</p>
         </div>
       ) : !hasRates ? (
-        <div className="glass" style={{ borderRadius: '1rem', padding: '2rem', textAlign: 'center' }}>
-          <RefreshCw style={{ width: '2rem', height: '2rem', color: '#d97706', margin: '0 auto 0.75rem' }} />
-          <p style={{ fontSize: '0.875rem', color: '#92400e', fontWeight: 500 }}>
-            No EP-756 currency rate data available in the parsed reports.
+        <div className="glass rounded-2xl p-6 text-center">
+          <RefreshCw className="w-6 h-6 mx-auto mb-3" style={{ color: '#d97706' }} />
+          <p className="text-sm font-medium" style={{ color: '#92400e' }}>
+            No EP-756 currency rate data available.
           </p>
-          <p style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '0.25rem' }}>
+          <p className="text-xs mt-1" style={{ color: '#b45309' }}>
             Upload a VSS Edit Package containing EP756.TXT to view settlement rates.
           </p>
         </div>
@@ -503,50 +522,30 @@ export default function CurrencyRates() {
           {/* ── Major VSS Rate Spotlight Cards ── */}
           {spotlightRates.length > 0 && (
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <div style={{
-                  width: '1.75rem', height: '1.75rem', borderRadius: '0.5rem',
-                  background: ACCENT.purple.bg, border: `1.5px solid ${ACCENT.purple.ring}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <TrendingUp style={{ width: '0.875rem', height: '0.875rem', color: ACCENT.purple.fill }} />
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: ACCENT.purple.bg, border: `1.5px solid ${ACCENT.purple.ring}` }}>
+                  <TrendingUp className="w-3.5 h-3.5" style={{ color: ACCENT.purple.fill }} />
                 </div>
-                <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                  VSS Settlement Rates — Key Pairs
-                </h3>
-                <span style={{ fontSize: '0.6875rem', color: '#94a3b8', marginLeft: '0.25rem' }}>
-                  Settlement period: {settlementDate}
-                </span>
+                <h3 className="text-sm font-bold" style={{ color: '#0f172a' }}>VSS Settlement Rates — Key Pairs</h3>
+                <span className="text-[11px] ml-1" style={{ color: '#94a3b8' }}>Period: {settlementDate}</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
                 {spotlightRates.map((rate, idx) => {
                   const accent = ACCENT[accentCycle[idx % accentCycle.length]];
                   return (
-                    <div key={rate.pairKey} className="glass" style={{
-                      borderRadius: '0.875rem', padding: '1rem',
-                      transition: 'transform 0.2s, box-shadow 0.2s',
-                      cursor: 'default',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.625rem' }}>
-                        <span style={{
-                          fontSize: '0.6875rem', fontWeight: 700, color: accent.text,
-                          textTransform: 'uppercase', letterSpacing: '0.06em',
-                        }}>
+                    <div key={rate.pairKey} className="glass rounded-xl p-3.5 transition-all hover:scale-[1.02]">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent.text }}>
                           {rate.fromCurrency} → {rate.toCurrency}
                         </span>
-                        <div style={{
-                          width: '0.375rem', height: '0.375rem', borderRadius: '50%',
-                          background: accent.fill,
-                        }} />
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: accent.fill }} />
                       </div>
-                      <p style={{
-                        fontSize: '1.125rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.25rem',
-                        fontFamily: "'SF Mono', 'Fira Code', monospace",
-                      }}>
+                      <p className="text-base font-extrabold font-mono" style={{ color: '#0f172a' }}>
                         {formatNumber(rate.rate, 4)}
                       </p>
-                      <p style={{ fontSize: '0.625rem', color: '#94a3b8', margin: 0 }}>
-                        Sell: {formatNumber(rate.sellRate, 4)} • Spread: {rate.spread.toFixed(3)}%
+                      <p className="text-[9px] mt-0.5" style={{ color: '#94a3b8' }}>
+                        Sell: {formatNumber(rate.sellRate, 4)} • {rate.spread.toFixed(3)}%
                       </p>
                     </div>
                   );
@@ -556,29 +555,21 @@ export default function CurrencyRates() {
           )}
 
           {/* ── Full VSS Rates Table ── */}
-          <div className="glass-strong" style={{ borderRadius: '1rem', padding: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{
-                  width: '1.75rem', height: '1.75rem', borderRadius: '0.5rem',
-                  background: ACCENT.green.bg, border: `1.5px solid ${ACCENT.green.ring}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Shield style={{ width: '0.875rem', height: '0.875rem', color: ACCENT.green.fill }} />
+          <div className="glass-strong rounded-2xl p-5 xl:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                  style={{ background: ACCENT.green.bg, border: `1.5px solid ${ACCENT.green.ring}` }}>
+                  <Shield className="w-3.5 h-3.5" style={{ color: ACCENT.green.fill }} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-                    Visa Settlement Rates (EP-756)
-                  </h3>
-                  <p style={{ fontSize: '0.6875rem', color: '#94a3b8', margin: 0 }}>
-                    Rates used by Visa for settlement processing • {formatNumber(rateRows.length)} pairs
+                  <h3 className="text-sm font-bold" style={{ color: '#0f172a' }}>Visa Settlement Rates (EP-756)</h3>
+                  <p className="text-[10px]" style={{ color: '#94a3b8' }}>
+                    Rates used for settlement processing • {formatNumber(rateRows.length)} pairs
                   </p>
                 </div>
               </div>
-              <div className="glass-subtle" style={{
-                padding: '0.25rem 0.625rem', borderRadius: '9999px',
-                fontSize: '0.6875rem', fontWeight: 600, color: '#475569',
-              }}>
+              <div className="glass-subtle rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ color: '#475569' }}>
                 Period: {settlementDate}
               </div>
             </div>
@@ -594,27 +585,23 @@ export default function CurrencyRates() {
           </div>
 
           {/* ── Info Cards ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div className="glass" style={{ borderRadius: '0.875rem', padding: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <Globe style={{ width: '1rem', height: '1rem', color: ACCENT.blue.fill }} />
-                <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, color: ACCENT.blue.text, margin: 0 }}>
-                  Live Market Rates
-                </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="glass rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Globe className="w-4 h-4" style={{ color: ACCENT.blue.fill }} />
+                <h4 className="text-xs font-bold" style={{ color: ACCENT.blue.text }}>Live Market Rates</h4>
               </div>
-              <p style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.5', margin: 0 }}>
-                The converter uses live market rates covering 160+ currencies worldwide including African currencies. Rates are updated daily from open exchange rate feeds.
+              <p className="text-[11px] leading-relaxed" style={{ color: '#475569' }}>
+                The converter uses live market rates covering 160+ currencies. Rates updated daily from open exchange rate feeds.
               </p>
             </div>
-            <div className="glass" style={{ borderRadius: '0.875rem', padding: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <Shield style={{ width: '1rem', height: '1rem', color: ACCENT.green.fill }} />
-                <h4 style={{ fontSize: '0.8125rem', fontWeight: 700, color: ACCENT.green.text, margin: 0 }}>
-                  VSS Settlement Rates
-                </h4>
+            <div className="glass rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Shield className="w-4 h-4" style={{ color: ACCENT.green.fill }} />
+                <h4 className="text-xs font-bold" style={{ color: ACCENT.green.text }}>VSS Settlement Rates</h4>
               </div>
-              <p style={{ fontSize: '0.75rem', color: '#475569', lineHeight: '1.5', margin: 0 }}>
-                EP-756 rates are Visa's proprietary settlement rates, which include Visa's markup (typically 0–3%). These are the actual rates applied during settlement processing.
+              <p className="text-[11px] leading-relaxed" style={{ color: '#475569' }}>
+                EP-756 rates are Visa's proprietary settlement rates, which include Visa's markup (typically 0–3%). These are the actual rates applied during settlement.
               </p>
             </div>
           </div>
