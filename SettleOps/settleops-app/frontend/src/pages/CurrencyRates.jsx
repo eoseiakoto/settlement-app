@@ -1,45 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { getCurrencyRates, getMarketRates } from '../utils/api';
 import DataTable from '../components/DataTable';
 import { DollarSign, TrendingUp, RefreshCw, ArrowLeftRight, Globe, Shield, ArrowRight } from 'lucide-react';
 import { formatNumber } from '../utils/format';
-
-/* ── ISO 4217 Numeric → Alpha Currency Map ── */
-const CURRENCY_MAP = {
-  '004': 'AFN', '008': 'ALL', '012': 'DZD', '031': 'AZN', '032': 'ARS',
-  '036': 'AUD', '044': 'BSD', '048': 'BHD', '050': 'BDT', '051': 'AMD',
-  '052': 'BBD', '056': 'BEF', '060': 'BMD', '064': 'BTN', '068': 'BOB',
-  '072': 'BWP', '084': 'BZD', '090': 'SBD', '096': 'BND', '104': 'MMK',
-  '108': 'BIF', '116': 'KHR', '124': 'CAD', '132': 'CVE', '136': 'KYD',
-  '144': 'LKR', '152': 'CLP', '156': 'CNY', '170': 'COP', '174': 'KMF',
-  '188': 'CRC', '191': 'HRK', '192': 'CUP', '203': 'CZK', '208': 'DKK',
-  '214': 'DOP', '222': 'SVC', '230': 'ETB', '232': 'ERN', '238': 'FKP',
-  '242': 'FJD', '262': 'DJF', '270': 'GMD', '292': 'GIP', '320': 'GTQ',
-  '324': 'GNF', '328': 'GYD', '332': 'HTG', '340': 'HNL', '344': 'HKD',
-  '348': 'HUF', '352': 'ISK', '356': 'INR', '360': 'IDR', '364': 'IRR',
-  '368': 'IQD', '376': 'ILS', '388': 'JMD', '392': 'JPY', '398': 'KZT',
-  '400': 'JOD', '404': 'KES', '408': 'KPW', '410': 'KRW', '414': 'KWD',
-  '417': 'KGS', '418': 'LAK', '422': 'LBP', '426': 'LSL', '430': 'LRD',
-  '434': 'LYD', '446': 'MOP', '454': 'MWK', '458': 'MYR', '462': 'MVR',
-  '478': 'MRO', '480': 'MUR', '484': 'MXN', '496': 'MNT', '498': 'MDL',
-  '504': 'MAD', '508': 'MZN', '512': 'OMR', '516': 'NAD', '524': 'NPR',
-  '532': 'ANG', '533': 'AWG', '548': 'VUV', '554': 'NZD', '558': 'NIO',
-  '566': 'NGN', '578': 'NOK', '586': 'PKR', '590': 'PAB', '598': 'PGK',
-  '600': 'PYG', '604': 'PEN', '608': 'PHP', '634': 'QAR', '643': 'RUB',
-  '646': 'RWF', '654': 'SHP', '678': 'STD', '682': 'SAR', '690': 'SCR',
-  '694': 'SLL', '702': 'SGD', '704': 'VND', '706': 'SOS', '710': 'ZAR',
-  '716': 'ZWD', '748': 'SZL', '752': 'SEK', '756': 'CHF', '760': 'SYP',
-  '764': 'THB', '776': 'TOP', '780': 'TTD', '784': 'AED', '788': 'TND',
-  '800': 'UGX', '807': 'MKD', '818': 'EGP', '826': 'GBP', '834': 'TZS',
-  '840': 'USD', '858': 'UYU', '860': 'UZS', '882': 'WST', '886': 'YER',
-  '901': 'TWD', '928': 'VES', '929': 'MRU', '930': 'STN', '932': 'ZWL',
-  '933': 'BYN', '934': 'TMT', '936': 'GHS', '938': 'SDG', '941': 'RSD',
-  '943': 'MZN', '944': 'AZN', '946': 'RON', '947': 'CHE', '949': 'TRY',
-  '950': 'XAF', '951': 'XCD', '952': 'XOF', '953': 'XPF', '960': 'XDR',
-  '967': 'ZMW', '968': 'SRD', '969': 'MGA', '971': 'AFN', '972': 'TJS',
-  '973': 'AOA', '975': 'BGN', '976': 'CDF', '977': 'BAM', '978': 'EUR',
-  '980': 'UAH', '981': 'GEL', '985': 'PLN', '986': 'BRL',
-};
+import { numericToAlpha, getCurrencyName, currencyOption, CURRENCY_NAMES, PREFERRED_CURRENCIES } from '../utils/currency';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 
 /* ── Accent colour palette (matches Dashboard.jsx) ── */
 const ACCENT = {
@@ -49,41 +16,13 @@ const ACCENT = {
   amber:  { bg: 'rgba(217,119,6,0.12)',   ring: 'rgba(217,119,6,0.22)',  text: '#b45309', fill: '#d97706' },
 };
 
-/* ── Currency display names ── */
-const CURRENCY_NAMES = {
-  USD: 'US Dollar', EUR: 'Euro', GBP: 'British Pound', GHS: 'Ghana Cedi',
-  JPY: 'Japanese Yen', CHF: 'Swiss Franc', CAD: 'Canadian Dollar', AUD: 'Australian Dollar',
-  CNY: 'Chinese Yuan', INR: 'Indian Rupee', AED: 'UAE Dirham', SAR: 'Saudi Riyal',
-  NGN: 'Nigerian Naira', ZAR: 'South African Rand', KES: 'Kenyan Shilling',
-  BRL: 'Brazilian Real', MXN: 'Mexican Peso', SGD: 'Singapore Dollar',
-  HKD: 'Hong Kong Dollar', SEK: 'Swedish Krona', NOK: 'Norwegian Krone',
-  DKK: 'Danish Krone', PLN: 'Polish Zloty', CZK: 'Czech Koruna', HUF: 'Hungarian Forint',
-  TRY: 'Turkish Lira', THB: 'Thai Baht', MYR: 'Malaysian Ringgit', IDR: 'Indonesian Rupiah',
-  PHP: 'Philippine Peso', KRW: 'South Korean Won', TWD: 'Taiwan Dollar',
-  NZD: 'New Zealand Dollar', ILS: 'Israeli Shekel', EGP: 'Egyptian Pound',
-  RON: 'Romanian Leu', BGN: 'Bulgarian Lev', ISK: 'Icelandic Krona',
-};
-
-function currencyLabel(code) {
-  return CURRENCY_MAP[code] || code;
-}
-
 function parseVisaRate(rawRate) {
-  // Visa EP-756 "SCL FACT & RATE" encoding:
-  // 8-character field = 2-digit exponent + 6-digit mantissa
-  // Rate (counter per base) = 10^exponent / mantissa
   if (!rawRate || typeof rawRate !== 'string' || rawRate.length < 8) return 0;
   const exponent = parseInt(rawRate.substring(0, 2), 10);
   const mantissa = parseInt(rawRate.substring(2), 10);
   if (mantissa === 0 || isNaN(exponent) || isNaN(mantissa)) return 0;
   return Math.pow(10, exponent) / mantissa;
 }
-
-/* ── Preferred currencies shown at top of dropdown ── */
-const PREFERRED_CURRENCIES = [
-  'USD', 'EUR', 'GBP', 'GHS', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'INR',
-  'AED', 'SAR', 'NGN', 'ZAR', 'KES', 'BRL', 'MXN', 'SGD', 'HKD',
-];
 
 
 export default function CurrencyRates() {
@@ -101,6 +40,9 @@ export default function CurrencyRates() {
   const [conversionFrom, setConversionFrom] = useState('USD');
   const [conversionTo, setConversionTo] = useState('GHS');
   const [conversionAmount, setConversionAmount] = useState(1000);
+
+  /* ── Chart pair selector ── */
+  const [chartBase, setChartBase] = useState('USD');
 
   /* ── Load Visa settlement rates ── */
   useEffect(() => {
@@ -142,16 +84,15 @@ export default function CurrencyRates() {
     fetchMarketRates(conversionFrom);
   }, [conversionFrom, fetchMarketRates]);
 
-  /* ── Build dynamic currency list from market rates response ── */
-  const converterCurrencies = (() => {
+  /* ── Build deduplicated currency list from market rates ── */
+  const converterCurrencies = useMemo(() => {
     const available = marketRates?.rates ? Object.keys(marketRates.rates) : [];
-    // Always include the base currency
     const allCodes = new Set([conversionFrom, ...PREFERRED_CURRENCIES, ...available]);
-    // Sort with preferred currencies first, then alphabetical
     const preferred = PREFERRED_CURRENCIES.filter(c => allCodes.has(c));
     const rest = [...allCodes].filter(c => !PREFERRED_CURRENCIES.includes(c)).sort();
+    // Deduplicate — Set already handles this, but build final array once
     return [...preferred, ...rest];
-  })();
+  }, [marketRates, conversionFrom]);
 
   const marketSource = marketRates?.source || 'Open Exchange Rates';
 
@@ -161,31 +102,64 @@ export default function CurrencyRates() {
   const hasRates = rates.length > 0;
   const settlementDate = header.cpd || header.processing_date || '—';
 
-  const rawRows = rates.map((r, i) => {
-    const buyRate = parseVisaRate(r.buy_rate);
-    const sellRate = parseVisaRate(r.sell_rate);
-    const fromAlpha = currencyLabel(r.base_currency || '');
-    const toAlpha = currencyLabel(r.counter_currency || '');
-    return {
-      id: i,
-      fromCurrency: fromAlpha,
-      toCurrency: toAlpha,
-      rate: buyRate,
-      sellRate: sellRate,
-      spread: buyRate && sellRate ? Math.abs(((buyRate - sellRate) / buyRate) * 100) : 0,
-      inverseRate: buyRate ? 1 / buyRate : 0,
-      effectiveDate: r.effective_date || settlementDate,
-      pairKey: `${fromAlpha}-${toAlpha}`,
-    };
-  });
+  const rateRows = useMemo(() => {
+    const rawRows = rates.map((r, i) => {
+      const buyRate = parseVisaRate(r.buy_rate);
+      const sellRate = parseVisaRate(r.sell_rate);
+      const fromAlpha = numericToAlpha(r.base_currency || '');
+      const toAlpha = numericToAlpha(r.counter_currency || '');
+      return {
+        id: i,
+        fromCurrency: fromAlpha,
+        fromName: getCurrencyName(fromAlpha),
+        toCurrency: toAlpha,
+        toName: getCurrencyName(toAlpha),
+        rate: buyRate,
+        sellRate: sellRate,
+        spread: buyRate && sellRate ? Math.abs(((buyRate - sellRate) / buyRate) * 100) : 0,
+        inverseRate: buyRate ? 1 / buyRate : 0,
+        effectiveDate: r.effective_date || settlementDate,
+        pairKey: `${fromAlpha}-${toAlpha}`,
+      };
+    });
 
-  const seen = new Set();
-  const rateRows = rawRows.filter(r => {
-    if (r.fromCurrency === r.toCurrency) return false;
-    if (seen.has(r.pairKey)) return false;
-    seen.add(r.pairKey);
-    return true;
-  });
+    const seen = new Set();
+    return rawRows.filter(r => {
+      if (r.fromCurrency === r.toCurrency) return false;
+      if (seen.has(r.pairKey)) return false;
+      seen.add(r.pairKey);
+      return true;
+    });
+  }, [rates, settlementDate]);
+
+  /* ── Build chart data — top counter currencies for selected base ── */
+  const chartData = useMemo(() => {
+    const baseRates = rateRows.filter(r => r.fromCurrency === chartBase && r.rate > 0);
+    if (baseRates.length === 0) return [];
+    // Pick top 8 by relevance (prefer major currencies)
+    const majors = ['GHS', 'EUR', 'GBP', 'JPY', 'CHF', 'AED', 'INR', 'ZAR', 'CNY', 'CAD', 'AUD', 'NGN', 'KES'];
+    const sorted = baseRates.sort((a, b) => {
+      const aIdx = majors.indexOf(a.toCurrency);
+      const bIdx = majors.indexOf(b.toCurrency);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+      return a.toCurrency.localeCompare(b.toCurrency);
+    }).slice(0, 10);
+    return sorted.map(r => ({
+      pair: `${r.toCurrency}`,
+      name: getCurrencyName(r.toCurrency),
+      buy: parseFloat(r.rate.toFixed(6)),
+      sell: parseFloat(r.sellRate.toFixed(6)),
+      spread: parseFloat(r.spread.toFixed(4)),
+    }));
+  }, [rateRows, chartBase]);
+
+  /* ── Available base currencies for chart selector ── */
+  const chartBaseCurrencies = useMemo(() => {
+    const bases = new Set(rateRows.map(r => r.fromCurrency));
+    return [...bases].sort();
+  }, [rateRows]);
 
   /* ── Live market conversion ── */
   const marketConversionRate = marketRates?.rates?.[conversionTo] || null;
@@ -202,15 +176,19 @@ export default function CurrencyRates() {
     {
       key: 'fromCurrency',
       label: 'Base Currency',
-      render: (val) => (
-        <span style={{ fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>{val}</span>
+      render: (val, row) => (
+        <span style={{ fontWeight: 600, color: '#1e293b' }}>
+          {val} <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.75rem' }}>({row.fromName})</span>
+        </span>
       ),
     },
     {
       key: 'toCurrency',
       label: 'Counter Currency',
-      render: (val) => (
-        <span style={{ fontWeight: 600, color: '#1e293b', letterSpacing: '0.04em' }}>{val}</span>
+      render: (val, row) => (
+        <span style={{ fontWeight: 600, color: '#1e293b' }}>
+          {val} <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.75rem' }}>({row.toName})</span>
+        </span>
       ),
     },
     {
@@ -283,203 +261,292 @@ export default function CurrencyRates() {
         )}
       </div>
 
-      {/* ══════════════ LIVE MARKET RATE CONVERTER ══════════════ */}
-      <div className="glass-strong" style={{ borderRadius: '1rem', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
-        {/* Subtle accent orb */}
-        <div style={{
-          position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px',
-          borderRadius: '50%', background: 'rgba(37,99,235,0.06)', filter: 'blur(40px)', pointerEvents: 'none',
-        }} />
+      {/* ══════════════ SPLIT LAYOUT: CONVERTER (left) + RATE PATTERN (right) ══════════════ */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', position: 'relative' }}>
+        {/* ── LEFT: LIVE MARKET RATE CONVERTER ── */}
+        <div className="glass-strong" style={{ borderRadius: '1rem', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
           <div style={{
-            width: '2rem', height: '2rem', borderRadius: '0.625rem',
-            background: ACCENT.blue.bg, border: `1.5px solid ${ACCENT.blue.ring}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Globe style={{ width: '1rem', height: '1rem', color: ACCENT.blue.fill }} />
+            position: 'absolute', top: '-40px', right: '-40px', width: '160px', height: '160px',
+            borderRadius: '50%', background: 'rgba(37,99,235,0.06)', filter: 'blur(40px)', pointerEvents: 'none',
+          }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', position: 'relative' }}>
+            <div style={{
+              width: '2rem', height: '2rem', borderRadius: '0.625rem',
+              background: ACCENT.blue.bg, border: `1.5px solid ${ACCENT.blue.ring}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Globe style={{ width: '1rem', height: '1rem', color: ACCENT.blue.fill }} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                Exchange Rate Converter
+              </h3>
+              <p style={{ fontSize: '0.6875rem', color: '#94a3b8', margin: 0 }}>
+                Powered by {marketSource}
+                {marketLastUpdated && ` • Updated ${marketLastUpdated.toLocaleTimeString()}`}
+              </p>
+            </div>
+            <button
+              onClick={() => fetchMarketRates(conversionFrom)}
+              disabled={marketLoading}
+              style={{
+                marginLeft: 'auto', padding: '0.375rem', borderRadius: '0.5rem',
+                border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+              title="Refresh rates"
+            >
+              <RefreshCw style={{
+                width: '0.875rem', height: '0.875rem', color: '#64748b',
+                animation: marketLoading ? 'spin 1s linear infinite' : 'none',
+              }} />
+            </button>
           </div>
-          <div>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
-              Live Market Rate Converter
-            </h3>
-            <p style={{ fontSize: '0.6875rem', color: '#94a3b8', margin: 0 }}>
-              Powered by {marketSource}
-              {marketLastUpdated && ` • Updated ${marketLastUpdated.toLocaleTimeString()}`}
-            </p>
+
+          {/* Converter Fields — stacked for the narrower column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {/* From */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                From
+              </label>
+              <select
+                value={conversionFrom}
+                onChange={(e) => setConversionFrom(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
+                  border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
+                  fontSize: '0.875rem', fontWeight: 600, color: '#0f172a',
+                  outline: 'none', cursor: 'pointer', appearance: 'auto',
+                }}
+              >
+                {converterCurrencies.map(c => (
+                  <option key={c} value={c}>{currencyOption(c)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Swap + Amount row */}
+            <div style={{ display: 'flex', alignItems: 'end', gap: '0.75rem' }}>
+              <button
+                onClick={handleSwap}
+                style={{
+                  width: '2.25rem', height: '2.25rem', borderRadius: '50%', flexShrink: 0,
+                  border: '1.5px solid rgba(37,99,235,0.25)', background: ACCENT.blue.bg,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.2s',
+                }}
+                title="Swap currencies"
+              >
+                <ArrowLeftRight style={{ width: '0.875rem', height: '0.875rem', color: ACCENT.blue.fill }} />
+              </button>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Amount
+                </label>
+                <input
+                  type="number"
+                  value={conversionAmount}
+                  onChange={(e) => setConversionAmount(parseFloat(e.target.value) || 0)}
+                  style={{
+                    width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
+                    border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
+                    fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', outline: 'none',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* To */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                To
+              </label>
+              <select
+                value={conversionTo}
+                onChange={(e) => setConversionTo(e.target.value)}
+                style={{
+                  width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
+                  border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
+                  fontSize: '0.875rem', fontWeight: 600, color: '#0f172a',
+                  outline: 'none', cursor: 'pointer', appearance: 'auto',
+                }}
+              >
+                {converterCurrencies.map(c => (
+                  <option key={c} value={c}>{currencyOption(c)}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <button
-            onClick={() => fetchMarketRates(conversionFrom)}
-            disabled={marketLoading}
-            style={{
-              marginLeft: 'auto', padding: '0.375rem', borderRadius: '0.5rem',
-              border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.2s',
-            }}
-            title="Refresh rates"
-          >
-            <RefreshCw style={{
-              width: '0.875rem', height: '0.875rem', color: '#64748b',
-              animation: marketLoading ? 'spin 1s linear infinite' : 'none',
-            }} />
-          </button>
+
+          {/* Conversion Result */}
+          {marketLoading ? (
+            <div style={{
+              marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
+              background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '0.8125rem', color: '#64748b', margin: 0 }}>Fetching live rates...</p>
+            </div>
+          ) : marketError ? (
+            <div style={{
+              marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
+              background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '0.8125rem', color: '#b91c1c', margin: 0 }}>{marketError}</p>
+            </div>
+          ) : conversionFrom === conversionTo ? (
+            <div style={{
+              marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
+              background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.25rem' }}>
+                {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.8125rem', color: '#475569' }}>{conversionFrom}</span>
+              </p>
+              <p style={{ fontSize: '0.6875rem', color: '#94a3b8', margin: 0 }}>Same currency — rate is 1:1</p>
+            </div>
+          ) : marketConversionRate ? (
+            <div style={{
+              marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
+              background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(5,150,105,0.04) 100%)',
+              border: '1px solid rgba(37,99,235,0.10)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Amount</p>
+                  <p style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                    {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.75rem', color: '#475569' }}>{conversionFrom}</span>
+                  </p>
+                </div>
+                <ArrowRight style={{ width: '1.125rem', height: '1.125rem', color: ACCENT.blue.fill }} />
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Converted</p>
+                  <p style={{ fontSize: '1.25rem', fontWeight: 800, color: ACCENT.green.text, margin: 0 }}>
+                    {formatNumber(convertedAmount, 2)} <span style={{ fontSize: '0.75rem', color: '#475569' }}>{conversionTo}</span>
+                  </p>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.6875rem', textAlign: 'center', color: '#64748b', marginTop: '0.75rem' }}>
+                1 {conversionFrom} = {formatNumber(marketConversionRate, 6)} {conversionTo}
+                <span style={{ color: '#94a3b8' }}> • {marketSource}</span>
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
+              background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '0.8125rem', color: '#94a3b8', margin: 0 }}>
+                No market rate available for {conversionFrom} → {conversionTo}
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Converter Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
-          {/* From */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              From
-            </label>
+        {/* ── RIGHT: EXCHANGE RATE PATTERN CHART ── */}
+        <div className="glass-strong" style={{ borderRadius: '1rem', padding: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+          <div style={{
+            position: 'absolute', top: '-40px', left: '-40px', width: '160px', height: '160px',
+            borderRadius: '50%', background: 'rgba(109,40,217,0.06)', filter: 'blur(40px)', pointerEvents: 'none',
+          }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', position: 'relative' }}>
+            <div style={{
+              width: '2rem', height: '2rem', borderRadius: '0.625rem',
+              background: ACCENT.purple.bg, border: `1.5px solid ${ACCENT.purple.ring}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <TrendingUp style={{ width: '1rem', height: '1rem', color: ACCENT.purple.fill }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                VSS Rate Pattern
+              </h3>
+              <p style={{ fontSize: '0.6875rem', color: '#94a3b8', margin: 0 }}>
+                Buy vs Sell rates — Visa settlement (EP-756)
+              </p>
+            </div>
+            {/* Base currency selector */}
             <select
-              value={conversionFrom}
-              onChange={(e) => setConversionFrom(e.target.value)}
+              value={chartBase}
+              onChange={(e) => setChartBase(e.target.value)}
               style={{
-                width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
+                padding: '0.375rem 0.5rem', borderRadius: '0.5rem',
                 border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem', fontWeight: 600, color: '#0f172a',
-                outline: 'none', cursor: 'pointer', appearance: 'auto',
+                fontSize: '0.75rem', fontWeight: 600, color: '#0f172a',
+                outline: 'none', cursor: 'pointer',
               }}
             >
-              {converterCurrencies.map(c => (
-                <option key={c} value={c}>{c}{CURRENCY_NAMES[c] ? ` — ${CURRENCY_NAMES[c]}` : ''}</option>
+              {chartBaseCurrencies.map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
 
-          {/* Swap button */}
-          <button
-            onClick={handleSwap}
-            style={{
-              width: '2.25rem', height: '2.25rem', borderRadius: '50%',
-              border: '1.5px solid rgba(37,99,235,0.25)', background: ACCENT.blue.bg,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: '0.125rem', transition: 'all 0.2s',
-            }}
-            title="Swap currencies"
-          >
-            <ArrowLeftRight style={{ width: '0.875rem', height: '0.875rem', color: ACCENT.blue.fill }} />
-          </button>
+          {chartData.length > 0 ? (
+            <div style={{ width: '100%', height: '320px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                  <XAxis
+                    dataKey="pair"
+                    tick={{ fontSize: 11, fontWeight: 600, fill: '#475569' }}
+                    axisLine={{ stroke: 'rgba(0,0,0,0.08)' }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#94a3b8' }}
+                    axisLine={{ stroke: 'rgba(0,0,0,0.08)' }}
+                    domain={['auto', 'auto']}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(0,0,0,0.08)', borderRadius: '0.75rem',
+                      fontSize: '0.75rem', boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    }}
+                    formatter={(value, name) => [value.toFixed(6), name === 'buy' ? 'Buy Rate' : 'Sell Rate']}
+                    labelFormatter={(label) => `${chartBase} → ${label} (${getCurrencyName(label)})`}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '0.75rem', fontWeight: 600 }}
+                    formatter={(val) => val === 'buy' ? 'Buy Rate' : 'Sell Rate'}
+                  />
+                  <Line type="monotone" dataKey="buy" stroke={ACCENT.green.fill} strokeWidth={2.5} dot={{ r: 4, fill: ACCENT.green.fill }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="sell" stroke={ACCENT.amber.fill} strokeWidth={2.5} dot={{ r: 4, fill: ACCENT.amber.fill }} activeDot={{ r: 6 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '320px' }}>
+              <RefreshCw style={{ width: '1.25rem', height: '1.25rem', color: '#94a3b8', animation: 'spin 1s linear infinite' }} />
+              <span style={{ marginLeft: '0.5rem', fontSize: '0.8125rem', color: '#64748b' }}>Loading rates...</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '320px', color: '#94a3b8', fontSize: '0.8125rem' }}>
+              No VSS rate data available for {chartBase}
+            </div>
+          )}
 
-          {/* To */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              To
-            </label>
-            <select
-              value={conversionTo}
-              onChange={(e) => setConversionTo(e.target.value)}
-              style={{
-                width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
-                border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem', fontWeight: 600, color: '#0f172a',
-                outline: 'none', cursor: 'pointer', appearance: 'auto',
-              }}
-            >
-              {converterCurrencies.map(c => (
-                <option key={c} value={c}>{c}{CURRENCY_NAMES[c] ? ` — ${CURRENCY_NAMES[c]}` : ''}</option>
+          {/* Spread summary */}
+          {chartData.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+              {chartData.slice(0, 6).map((d) => (
+                <div key={d.pair} style={{
+                  padding: '0.25rem 0.5rem', borderRadius: '9999px', fontSize: '0.625rem', fontWeight: 600,
+                  background: 'rgba(109,40,217,0.06)', color: '#6d28d9',
+                }}>
+                  {d.pair}: {d.spread}% spread
+                </div>
               ))}
-            </select>
-          </div>
-
-          {/* Amount */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, color: '#64748b', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Amount
-            </label>
-            <input
-              type="number"
-              value={conversionAmount}
-              onChange={(e) => setConversionAmount(parseFloat(e.target.value) || 0)}
-              style={{
-                width: '100%', padding: '0.625rem 0.75rem', borderRadius: '0.625rem',
-                border: '1px solid rgba(0,0,0,0.10)', background: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', outline: 'none',
-              }}
-            />
-          </div>
+            </div>
+          )}
         </div>
-
-        {/* Conversion Result */}
-        {marketLoading ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
-            background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '0.8125rem', color: '#64748b', margin: 0 }}>Fetching live rates...</p>
-          </div>
-        ) : marketError ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
-            background: 'rgba(220,38,38,0.04)', border: '1px solid rgba(220,38,38,0.12)',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '0.8125rem', color: '#b91c1c', margin: 0 }}>{marketError}</p>
-          </div>
-        ) : conversionFrom === conversionTo ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.5rem', borderRadius: '0.75rem',
-            background: 'rgba(37,99,235,0.04)', border: '1px solid rgba(37,99,235,0.10)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Amount</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionFrom}</span>
-                </p>
-              </div>
-              <ArrowRight style={{ width: '1.25rem', height: '1.25rem', color: '#94a3b8' }} />
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Converted</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionTo}</span>
-                </p>
-              </div>
-            </div>
-            <p style={{ fontSize: '0.6875rem', textAlign: 'center', color: '#94a3b8', marginTop: '0.75rem' }}>
-              Same currency — rate is 1:1
-            </p>
-          </div>
-        ) : marketConversionRate ? (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.5rem', borderRadius: '0.75rem',
-            background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(5,150,105,0.04) 100%)',
-            border: '1px solid rgba(37,99,235,0.10)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1.5rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Amount</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                  {formatNumber(conversionAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionFrom}</span>
-                </p>
-              </div>
-              <ArrowRight style={{ width: '1.25rem', height: '1.25rem', color: ACCENT.blue.fill }} />
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Converted</p>
-                <p style={{ fontSize: '1.5rem', fontWeight: 800, color: ACCENT.green.text, margin: 0 }}>
-                  {formatNumber(convertedAmount, 2)} <span style={{ fontSize: '0.875rem', color: '#475569' }}>{conversionTo}</span>
-                </p>
-              </div>
-            </div>
-            <p style={{ fontSize: '0.6875rem', textAlign: 'center', color: '#64748b', marginTop: '0.75rem' }}>
-              1 {conversionFrom} = {formatNumber(marketConversionRate, 6)} {conversionTo}
-              <span style={{ color: '#94a3b8' }}> • {marketSource}</span>
-            </p>
-          </div>
-        ) : (
-          <div style={{
-            marginTop: '1.25rem', padding: '1.25rem', borderRadius: '0.75rem',
-            background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '0.8125rem', color: '#94a3b8', margin: 0 }}>
-              No market rate available for {conversionFrom} → {conversionTo}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* ══════════════ VSS SETTLEMENT RATES SECTION ══════════════ */}
@@ -545,6 +612,9 @@ export default function CurrencyRates() {
                       }}>
                         {formatNumber(rate.rate, 4)}
                       </p>
+                      <p style={{ fontSize: '0.625rem', color: '#64748b', margin: 0 }}>
+                        {getCurrencyName(rate.toCurrency)}
+                      </p>
                       <p style={{ fontSize: '0.625rem', color: '#94a3b8', margin: 0 }}>
                         Sell: {formatNumber(rate.sellRate, 4)} • Spread: {rate.spread.toFixed(3)}%
                       </p>
@@ -588,7 +658,7 @@ export default function CurrencyRates() {
               paginated={true}
               pageSize={20}
               searchable={true}
-              searchFields={['fromCurrency', 'toCurrency']}
+              searchFields={['fromCurrency', 'toCurrency', 'fromName', 'toName']}
               loading={false}
             />
           </div>

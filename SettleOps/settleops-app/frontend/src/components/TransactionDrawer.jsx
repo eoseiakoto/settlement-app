@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { formatNumber } from '../utils/format';
+import { numericToAlpha } from '../utils/currency';
 import { X, CreditCard, MapPin, Terminal, Shield, ArrowLeftRight, Hash, FileText, ChevronLeft, ChevronRight, Copy, Check, ChevronDown } from 'lucide-react';
-
-const CURRENCY_MAP = { '936': 'GHS', '840': 'USD', '978': 'EUR', '826': 'GBP', '392': 'JPY', '971': 'AFN' };
 
 const POS_ENTRY = {
   '00': 'Unknown', '01': 'Manual', '02': 'Magnetic Stripe', '05': 'Chip (ICC)',
@@ -31,7 +30,7 @@ const TYPE_STYLES = {
   REVERSAL: { bg: 'rgba(220,38,38,0.08)',  color: '#b91c1c', dot: '#ef4444' },
 };
 
-function currLabel(code) { return CURRENCY_MAP[code] || code || '-'; }
+function currLabel(code) { return numericToAlpha(code); }
 function maskPan(pan) {
   if (!pan || pan.length < 10) return pan || '-';
   return pan.substring(0, 6) + ' •••• ' + pan.substring(pan.length - 4);

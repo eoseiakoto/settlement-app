@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getTransactions } from '../utils/api';
 import { formatNumber } from '../utils/format';
+import { numericToAlpha } from '../utils/currency';
 import TransactionDrawer, { getTypeLabel } from '../components/TransactionDrawer';
 
-const CURRENCY_MAP = { '936': 'GHS', '840': 'USD', '978': 'EUR', '826': 'GBP', '392': 'JPY', '971': 'AFN' };
-function currLabel(code) { return CURRENCY_MAP[code] || code || '-'; }
+function currLabel(code) { return numericToAlpha(code); }
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
