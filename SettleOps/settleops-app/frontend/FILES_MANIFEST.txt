@@ -1,0 +1,344 @@
+================================================================================
+SETTLEOPS FRONTEND - FILES MANIFEST
+================================================================================
+
+PROJECT ROOT
+  /sessions/upbeat-kind-goodall/settleops-frontend/
+
+ROOT FILES
+  index.html                    - HTML entry point (updated)
+  package.json                  - Dependencies (pre-configured)
+  vite.config.js               - Vite config with Tailwind & proxy
+  .env.example                 - Environment template
+
+DOCUMENTATION
+  SETUP.md                     - Complete setup guide
+  BUILD_SUMMARY.txt            - Build details
+  IMPLEMENTATION_COMPLETE.txt  - Full implementation report
+  FILES_MANIFEST.txt           - This file
+
+SRC DIRECTORY
+  src/index.css                - Tailwind v4 imports
+  src/main.jsx                 - Entry point with BrowserRouter
+  src/App.jsx                  - Route setup (7 pages)
+
+UTILITIES (src/utils/)
+  src/utils/api.js             - API client (12 functions)
+  src/utils/format.js          - Formatting utilities (7 functions)
+
+DATA (src/data/)
+  src/data/mockData.js         - Realistic mock data for all pages
+
+COMPONENTS (src/components/)
+  src/components/Layout.jsx    - Main layout with sidebar & nav
+  src/components/StatCard.jsx  - Reusable stat card component
+  src/components/DataTable.jsx - Sortable, paginated data table
+
+PAGES (src/pages/)
+  src/pages/Dashboard.jsx      - Main dashboard
+  src/pages/Transactions.jsx   - Transaction browser
+  src/pages/Settlement.jsx     - Settlement overview
+  src/pages/Fees.jsx           - Fees & charges
+  src/pages/Reconciliation.jsx - Reconciliation status
+  src/pages/ControlReports.jsx - Control reports index
+  src/pages/CurrencyRates.jsx  - Currency rates & converter
+
+ASSETS (src/assets/)
+  src/assets/react.svg         - React logo
+  src/assets/vite.svg          - Vite logo
+  src/assets/hero.png          - Hero image
+
+================================================================================
+FILE DESCRIPTIONS
+================================================================================
+
+index.html
+  - Updated title: "SettleOps - ADB Settlement Platform"
+  - Added Inter font from Google Fonts CDN
+  - Meta tags configured
+
+src/index.css
+  - @import "tailwindcss" for v4 setup
+  - Base layer with Inter font family
+  - No legacy CSS
+
+src/main.jsx
+  - React 19 StrictMode
+  - BrowserRouter wrapper for routing
+  - Root element mounting
+
+src/App.jsx
+  - 7 routes for all pages
+  - Layout wrapper component
+  - Package date state management
+
+src/utils/api.js (12 exported functions)
+  - apiCall(endpoint, options) - Generic fetch wrapper
+  - getDashboard() - Dashboard metrics
+  - getTransactions(params) - Paginated transactions
+  - getTransactionsSummary() - Transaction summary
+  - getSettlement() - Settlement data
+  - getSettlementHierarchy() - Hierarchy data
+  - getSettlementFees() - Fee details
+  - getReconciliation() - Reconciliation data
+  - getBatchSummary() - Batch summaries
+  - getCurrencyRates() - Exchange rates
+  - getReportIndex() - Report index
+  - getPackages() - Uploaded packages
+  - uploadPackage(formData) - Upload endpoint
+
+src/utils/format.js (7 exported functions)
+  - formatCurrency(value, currency, locale)
+  - formatNumber(value, decimals)
+  - abbreviateNumber(value)
+  - formatDate(date, format)
+  - formatPercentage(value, decimals)
+  - getCurrencySymbol(currency)
+  - formatFileSize(bytes)
+
+src/data/mockData.js
+  - mockTransactions (8 items) - Sales, cash, reversals
+  - mockSettlement - Hierarchy and currency breakdown
+  - mockFees - 4 fee categories
+  - mockCurrencyRates - USD, EUR, GBP, ZAR
+  - mockReconciliation - Matched/unmatched batches
+  - mockDashboard - Dashboard aggregates
+
+src/components/Layout.jsx
+  - Sidebar navigation (7 menu items)
+  - Collapsible toggle
+  - Top bar with ADB branding
+  - Main content area with children
+  - Upload button
+  - 8 Lucide React icons
+
+src/components/StatCard.jsx
+  - Icon (optional, right side)
+  - Label and value
+  - Change indicator (optional)
+  - 5 color accents
+  - Trending icons
+
+src/components/DataTable.jsx
+  - Columns configuration
+  - Sortable columns
+  - Pagination with controls
+  - Search functionality
+  - Custom cell rendering
+  - Loading state
+  - Empty state
+
+src/pages/Dashboard.jsx
+  - 6 stat cards (KPIs)
+  - Bar chart (transaction volume)
+  - Pie chart (currency distribution)
+  - Settlement status progress bar
+  - Recent transactions table
+  - 4 quick link cards
+
+src/pages/Transactions.jsx
+  - 6 filter controls
+  - 9-column data table
+  - Sortable/searchable
+  - Type badges
+  - Live filtering
+
+src/pages/Settlement.jsx
+  - 3 summary cards (debits/credits/net)
+  - Currency breakdown table
+  - SRE display and table
+  - Hierarchy visualization
+  - Information panels
+
+src/pages/Fees.jsx
+  - 4 summary cards (by category)
+  - Tabbed interface (5 tabs)
+  - Fee details table
+  - 4 information panels
+
+src/pages/Reconciliation.jsx
+  - 4 summary cards (match status)
+  - 2 progress bars
+  - Batch reconciliation table
+  - 4 information panels
+
+src/pages/ControlReports.jsx
+  - 6 sample reports (clickable)
+  - Details panel (sticky)
+  - 6 category panels
+  - Report ID, type, date
+
+src/pages/CurrencyRates.jsx
+  - Currency converter
+  - Exchange rate table
+  - Major rates grid
+  - Rate information panels
+
+================================================================================
+COMPONENT HIERARCHY
+================================================================================
+
+App.jsx
+  └─ Layout.jsx
+      ├─ Sidebar Navigation
+      │  ├─ Dashboard link
+      │  ├─ Transactions link
+      │  ├─ Settlement link
+      │  ├─ Fees link
+      │  ├─ Reconciliation link
+      │  ├─ Control Reports link
+      │  ├─ Currency Rates link
+      │  └─ Upload button
+      │
+      ├─ Top Bar
+      │  ├─ ADB Branding
+      │  └─ Package Date Display
+      │
+      └─ Routes (children)
+          ├─ Dashboard.jsx
+          │  ├─ StatCard (x6)
+          │  ├─ BarChart (Recharts)
+          │  ├─ PieChart (Recharts)
+          │  └─ DataTable
+          │
+          ├─ Transactions.jsx
+          │  ├─ Filter Controls (x6)
+          │  └─ DataTable
+          │
+          ├─ Settlement.jsx
+          │  ├─ StatCard (x3)
+          │  └─ DataTable (x2)
+          │
+          ├─ Fees.jsx
+          │  ├─ StatCard (x4)
+          │  ├─ Tabs (x5)
+          │  └─ DataTable
+          │
+          ├─ Reconciliation.jsx
+          │  ├─ StatCard (x4)
+          │  ├─ Progress Bars (x2)
+          │  └─ DataTable
+          │
+          ├─ ControlReports.jsx
+          │  ├─ Report List
+          │  └─ Details Panel
+          │
+          └─ CurrencyRates.jsx
+              ├─ Converter Form
+              └─ DataTable
+
+================================================================================
+DEPENDENCIES
+================================================================================
+
+Core
+  react@19.2.4
+  react-dom@19.2.4
+  react-router-dom@7.13.1
+
+UI & Styling
+  @tailwindcss/vite@4.2.2
+  tailwindcss@4.2.2
+  lucide-react@0.577.0
+
+Charts
+  recharts@3.8.0
+
+Dev Tools
+  vite@8.0.1
+  @vitejs/plugin-react@6.0.1
+  eslint@9.39.4
+  (and other dev dependencies)
+
+================================================================================
+CODE STATISTICS
+================================================================================
+
+Total Lines of Code (approx):
+  - Components: ~1,200 lines
+  - Pages: ~2,400 lines
+  - Utils: ~300 lines
+  - Mock Data: ~200 lines
+  - Total: ~4,100 lines
+
+Component Count: 3 reusable
+Page Count: 7 unique pages
+Route Count: 7 routes
+API Functions: 12 functions
+Format Functions: 7 functions
+Mock Data Objects: 6 objects
+
+Tailwind Classes Used: ~400 (automatic detection)
+Lucide Icons Used: 8 different icons
+
+================================================================================
+BUILD OUTPUTS
+================================================================================
+
+Development Build
+  - vite dev server on localhost:5173
+  - Hot Module Reload enabled
+  - Source maps available
+  - Mock data fallback
+
+Production Build
+  - dist/index.html (0.60 kB)
+  - dist/assets/index-*.css (22.73 kB, gzip: 5.12 kB)
+  - dist/assets/index-*.js (645.55 kB, gzip: 190.23 kB)
+  - Ready for deployment
+
+================================================================================
+API ENDPOINTS (Expected)
+================================================================================
+
+GET Endpoints
+  /api/dashboard
+  /api/transactions
+  /api/transactions/summary
+  /api/settlement
+  /api/settlement/hierarchy
+  /api/settlement/fees
+  /api/settlement/reconciliation
+  /api/control/batch-summary
+  /api/control/currency-rates
+  /api/control/index
+  /api/packages
+
+POST Endpoints
+  /api/upload
+
+All endpoints return JSON. Mock data structure matches expected format.
+
+================================================================================
+QUICK FILE FINDER
+================================================================================
+
+To modify...              Edit file...
+============================================================================
+Page content              src/pages/[PageName].jsx
+Colors/styling            src/index.css (Tailwind classes)
+API endpoints             src/utils/api.js
+Data formatting           src/utils/format.js
+Navigation menu           src/components/Layout.jsx
+Sidebar style            src/components/Layout.jsx
+Mock data               src/data/mockData.js
+Routing                 src/App.jsx
+HTML title/fonts        index.html
+Build config            vite.config.js
+
+================================================================================
+TOTAL PROJECT SIZE
+================================================================================
+
+Source Code: ~4,100 lines
+Assets: 3 images (Vite scaffold)
+Node Modules: ~500MB (not counted)
+Built Output: ~670 kB (uncompressed)
+Built Output: ~195 kB (gzipped)
+
+Dev Dependencies: 9 packages
+Runtime Dependencies: 4 packages
+
+================================================================================
+END OF MANIFEST
+================================================================================
