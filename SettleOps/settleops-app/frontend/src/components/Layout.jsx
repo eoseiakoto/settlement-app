@@ -272,46 +272,42 @@ export default function Layout({ children, currentPackageDate, onUploadComplete 
                         transition: 'all 0.2s',
                       }}
                     >
-                      <Upload style={{ width: '1.75rem', height: '1.75rem', color: '#94a3b8', margin: '0 auto 0.5rem' }} />
+                      <FolderOpen style={{ width: '1.75rem', height: '1.75rem', color: '#94a3b8', margin: '0 auto 0.5rem' }} />
                       <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>
-                        Drag &amp; drop files here
+                        Drag &amp; drop a VSS folder here
                       </p>
                       <p style={{ fontSize: '0.6875rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                        Supports .TXT EP report files (EP705, EP707, EP727, EP746, EP747, EP756, EP999)
+                        Select the folder containing EP report files (EP705, EP707, EP727, EP746, EP747, EP756, EP999)
                       </p>
                     </div>
 
-                    {/* Upload Buttons: Files or Folder */}
-                    <div style={{ display: 'flex', gap: '0.625rem', marginTop: '0.875rem' }}>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        style={{
-                          flex: 1, padding: '0.75rem', borderRadius: '0.75rem',
-                          border: '1px solid rgba(37,99,235,0.20)', background: 'rgba(37,99,235,0.04)',
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          gap: '0.5rem', transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(37,99,235,0.08)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(37,99,235,0.04)'}
-                      >
-                        <Upload style={{ width: '1rem', height: '1rem', color: '#2563eb' }} />
-                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1d4ed8' }}>Select Files</span>
-                      </button>
-                      <button
-                        onClick={() => folderInputRef.current?.click()}
-                        style={{
-                          flex: 1, padding: '0.75rem', borderRadius: '0.75rem',
-                          border: '1px solid rgba(5,150,105,0.20)', background: 'rgba(5,150,105,0.04)',
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          gap: '0.5rem', transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(5,150,105,0.08)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(5,150,105,0.04)'}
-                      >
-                        <FolderOpen style={{ width: '1rem', height: '1rem', color: '#059669' }} />
-                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#047857' }}>Select Folder</span>
-                      </button>
-                    </div>
+                    {/* Upload Buttons: Folder (primary) or individual Files (secondary) */}
+                    <button
+                      onClick={() => folderInputRef.current?.click()}
+                      style={{
+                        width: '100%', padding: '0.875rem', borderRadius: '0.75rem', marginTop: '0.875rem',
+                        border: '1.5px solid rgba(37,99,235,0.25)', background: 'rgba(37,99,235,0.06)',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        gap: '0.5rem', transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(37,99,235,0.10)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(37,99,235,0.06)'}
+                    >
+                      <FolderOpen style={{ width: '1.125rem', height: '1.125rem', color: '#2563eb' }} />
+                      <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1d4ed8' }}>Select VSS Folder</span>
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        width: '100%', padding: '0.5rem', borderRadius: '0.5rem', marginTop: '0.5rem',
+                        border: 'none', background: 'transparent',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        gap: '0.375rem', transition: 'all 0.2s',
+                      }}
+                    >
+                      <Upload style={{ width: '0.875rem', height: '0.875rem', color: '#94a3b8' }} />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8' }}>or select individual files</span>
+                    </button>
                   </>
                 )}
                 <input
