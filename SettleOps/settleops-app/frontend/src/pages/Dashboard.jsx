@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getDashboard } from '../utils/api';
 import { formatCurrency, formatNumber } from '../utils/format';
+import TransactionDrawer, { getTypeLabel } from '../components/TransactionDrawer';
 
 /* ── deeper, more saturated colour palette ── */
 const ACCENT = {
@@ -50,6 +51,7 @@ function transformApiData(apiData) {
     amount: txn.destination_amount_numeric || 0,
     currency: txn.destination_currency === '936' ? 'GHS' : txn.destination_currency || '-',
     authCode: txn.auth_code || '-',
+    _raw: txn,
   }));
 
   return {
@@ -161,6 +163,7 @@ const COUNTRY_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#db2777', '
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState(MOCK);
   const [loading, setLoading] = useState(true);
+  const [selectedIdx, setSelectedIdx] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -449,7 +452,8 @@ export default function Dashboard() {
               <tbody>
                 {d.recent.slice(0, 10).map((txn, idx) => (
                   <tr key={txn.id}
-                    className="transition-colors hover:bg-white/50"
+                    onClick={() => setSelectedIdx(idx)}
+                    className="transition-colors hover:bg-white/50 cursor-pointer"
                     style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                     <td className="py-3 px-3 text-xs font-medium" style={{ color: '#4b5563' }}>{txn.date}</td>
                     <td className="py-3 px-3">
@@ -479,6 +483,19 @@ export default function Dashboard() {
             </table>
           </div>
         </GlassPanel>
+      )}
+
+      {/* ── TRANSACTION DRAWER ── */}
+      {selectedIdx !== null && d.recent[selectedIdx] && (
+        <TransactionDrawer
+          txn={d.recent[selectedIdx]._raw || d.recent[selectedIdx]}
+          displayType={d.recent[selectedIdx].type}
+          onClose={() => setSelectedIdx(null)}
+          onPrev={() => setSelectedIdx(i => Math.max(0, i - 1))}
+          onNext={() => setSelectedIdx(i => Math.min(d.recent.length - 1, i + 1))}
+          hasPrev={selectedIdx > 0}
+          hasNext={selectedIdx < d.recent.length - 1}
+        />
       )}
     </div>
   );

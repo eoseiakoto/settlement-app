@@ -1,0 +1,18 @@
+# Sensitive data — exclude from context to avoid content filtering
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+
+# Raw settlement report files (contain PANs and account numbers)
+VSS_Reports/
+*.TXT
+
+# Build artifacts
+frontend/dist/
+frontend/dist/archive_*/
+frontend/node_modules/
+
+# Misc
+*.pyc
+__pycache__/
+.env

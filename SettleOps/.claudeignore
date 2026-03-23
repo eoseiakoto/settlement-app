@@ -1,0 +1,12 @@
+# Raw Visa settlement report files contain PANs and account numbers
+# Exclude to avoid content filtering triggers
+VSS_Reports/
+
+# Build artifacts and dependencies
+settleops-app/frontend/dist/
+settleops-app/frontend/node_modules/
+
+# Database files
+settleops-app/backend/data/*.db
+settleops-app/backend/data/*.db-wal
+settleops-app/backend/data/*.db-shm

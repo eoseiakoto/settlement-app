@@ -33,6 +33,13 @@ frontend/dist/
 # VSS Report data (large binary/text data files)
 SettleOps/VSS_Reports/
 
+# SQLite WAL/SHM files
+*.db-wal
+*.db-shm
+
 # Misc
 *.log
 *.tmp
+
+# Build output archives
+frontend/dist/archive_*/
