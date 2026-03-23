@@ -100,7 +100,7 @@ export default function CurrencyRates() {
   const rates = ratesData?.rates || [];
   const header = ratesData?.header || {};
   const hasRates = rates.length > 0;
-  const settlementDate = header.cpd || header.processing_date || '—';
+  const settlementDate = header.cpd || header.cpd_date || header.processing_date || '—';
 
   const rateRows = useMemo(() => {
     const rawRows = rates.map((r, i) => {

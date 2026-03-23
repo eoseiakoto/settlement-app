@@ -312,8 +312,10 @@ class SettleOpsStore:
                             (pkg_id, rtype, json.dumps(data, default=str))
                         )
 
-            # ----- Misc Reports (EP-750, EP-999) -----
-            for rtype in ['ep_750', 'ep_999']:
+            # ----- Misc Reports (EP-750, EP-756 full report, EP-999) -----
+            # EP-756 rates are stored individually in currency_rates above,
+            # but we also store the full report in misc_reports to preserve the header
+            for rtype in ['ep_750', 'ep_756', 'ep_999']:
                 data = misc.get(rtype)
                 if data:
                     existing_mr = conn.execute(
@@ -449,13 +451,21 @@ class SettleOpsStore:
         """Build misc_reports — rates are aggregated, others use latest."""
         result = {'ep_750': None, 'ep_756': None, 'ep_999': None}
 
-        # EP-756: aggregate all rates
+        # EP-756: aggregate all rates + restore header from misc_reports
         rate_rows = conn.execute(
             "SELECT data FROM currency_rates ORDER BY id"
         ).fetchall()
         if rate_rows:
             all_rates = [json.loads(r['data']) for r in rate_rows]
             result['ep_756'] = {'rates': all_rates}
+            # Restore the header (cpd, processing_date, etc.) from the stored EP-756 report
+            ep756_row = conn.execute(
+                "SELECT data FROM misc_reports WHERE report_type = 'ep_756' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            if ep756_row:
+                ep756_full = json.loads(ep756_row['data'])
+                if 'header' in ep756_full:
+                    result['ep_756']['header'] = ep756_full['header']
 
         # EP-750, EP-999: use latest
         for rtype in ['ep_750', 'ep_999']:
