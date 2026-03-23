@@ -482,13 +482,20 @@ class SettleOpsStore:
     # PACKAGE HISTORY
     # ========================================================================
 
-    def get_packages(self) -> list:
-        """Get list of all uploaded packages with metadata."""
+    def get_packages(self, from_date=None, to_date=None) -> list:
+        """Get list of uploaded packages with metadata, optionally filtered by date range."""
         conn = self._get_conn()
         try:
-            rows = conn.execute(
-                "SELECT * FROM packages ORDER BY upload_date DESC"
-            ).fetchall()
+            query = "SELECT * FROM packages WHERE 1=1"
+            params = []
+            if from_date:
+                query += " AND upload_date >= ?"
+                params.append(from_date)
+            if to_date:
+                query += " AND upload_date <= ?"
+                params.append(to_date + 'T23:59:59')
+            query += " ORDER BY upload_date DESC"
+            rows = conn.execute(query, params).fetchall()
             packages = []
             for row in rows:
                 packages.append({
@@ -518,6 +525,67 @@ class SettleOpsStore:
                 'total_rates': rate_count,
                 'total_packages': pkg_count,
             }
+        finally:
+            conn.close()
+
+    def delete_package(self, pkg_id: int) -> dict:
+        """Delete a package and all its associated data (cascade)."""
+        conn = self._get_conn()
+        try:
+            pkg = conn.execute("SELECT id, folder_name FROM packages WHERE id = ?", (pkg_id,)).fetchone()
+            if not pkg:
+                return {'deleted': False, 'error': 'Package not found'}
+            for table in ['transactions', 'currency_rates', 'settlement_reports',
+                          'summary_reports', 'misc_reports', 'raw_data']:
+                conn.execute(f"DELETE FROM {table} WHERE package_id = ?", (pkg_id,))
+            conn.execute("DELETE FROM packages WHERE id = ?", (pkg_id,))
+            conn.commit()
+            return {'deleted': True, 'package_id': pkg_id, 'folder_name': pkg['folder_name']}
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def cleanup_duplicate_packages(self) -> dict:
+        """Remove duplicate packages, keeping the earliest per fingerprint.
+        Also removes packages with NULL fingerprint and 0 transactions."""
+        conn = self._get_conn()
+        try:
+            deleted_count = 0
+            # Find fingerprints with multiple packages — keep earliest (lowest ID)
+            dupes = conn.execute("""
+                SELECT fingerprint, MIN(id) as keep_id, COUNT(*) as cnt
+                FROM packages WHERE fingerprint IS NOT NULL
+                GROUP BY fingerprint HAVING COUNT(*) > 1
+            """).fetchall()
+            for row in dupes:
+                to_delete = conn.execute(
+                    "SELECT id FROM packages WHERE fingerprint = ? AND id != ?",
+                    (row['fingerprint'], row['keep_id'])
+                ).fetchall()
+                for pkg in to_delete:
+                    for table in ['transactions', 'currency_rates', 'settlement_reports',
+                                  'summary_reports', 'misc_reports', 'raw_data']:
+                        conn.execute(f"DELETE FROM {table} WHERE package_id = ?", (pkg['id'],))
+                    conn.execute("DELETE FROM packages WHERE id = ?", (pkg['id'],))
+                    deleted_count += 1
+            # Remove orphaned packages with no fingerprint and 0 transactions/rates
+            empty = conn.execute(
+                "SELECT id FROM packages WHERE fingerprint IS NULL AND transaction_count = 0 AND rate_count = 0"
+            ).fetchall()
+            for pkg in empty:
+                for table in ['transactions', 'currency_rates', 'settlement_reports',
+                              'summary_reports', 'misc_reports', 'raw_data']:
+                    conn.execute(f"DELETE FROM {table} WHERE package_id = ?", (pkg['id'],))
+                conn.execute("DELETE FROM packages WHERE id = ?", (pkg['id'],))
+                deleted_count += 1
+            conn.commit()
+            remaining = conn.execute("SELECT COUNT(*) as c FROM packages").fetchone()['c']
+            return {'deleted_packages': deleted_count, 'remaining_packages': remaining}
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 

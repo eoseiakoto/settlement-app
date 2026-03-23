@@ -102,6 +102,17 @@ class PackageParser:
 
         return self.results
 
+    def _find_file(self, filename: str) -> Optional[Path]:
+        """Find a file in the package directory, case-insensitively."""
+        exact = self.package_dir / filename
+        if exact.exists():
+            return exact
+        target = filename.lower()
+        for entry in self.package_dir.iterdir():
+            if entry.is_file() and entry.name.lower() == target:
+                return entry
+        return None
+
     def _parse_transaction_reports(self):
         """Parse EP-705, EP-707, EP-727 transaction reports."""
         reports = [
@@ -111,8 +122,8 @@ class PackageParser:
         ]
 
         for filename, key, parser_func in reports:
-            filepath = self.package_dir / filename
-            if filepath.exists():
+            filepath = self._find_file(filename)
+            if filepath:
                 try:
                     self.results["transaction_reports"][key] = parser_func(str(filepath))
                     self.results["package_info"]["parsed_files"].append(filename)
@@ -136,8 +147,8 @@ class PackageParser:
         ]
 
         for filename, key, parser_func in reports:
-            filepath = self.package_dir / filename
-            if filepath.exists():
+            filepath = self._find_file(filename)
+            if filepath:
                 try:
                     self.results["summary_reports"][key] = parser_func(str(filepath))
                     self.results["package_info"]["parsed_files"].append(filename)
@@ -154,8 +165,8 @@ class PackageParser:
         ]
 
         for filename, key, parser_func in reports:
-            filepath = self.package_dir / filename
-            if filepath.exists():
+            filepath = self._find_file(filename)
+            if filepath:
                 try:
                     self.results["settlement_reports"][key] = parser_func(str(filepath))
                     self.results["package_info"]["parsed_files"].append(filename)
@@ -173,8 +184,8 @@ class PackageParser:
         ]
 
         for filename, key, parser_func in reports:
-            filepath = self.package_dir / filename
-            if filepath.exists():
+            filepath = self._find_file(filename)
+            if filepath:
                 try:
                     self.results["misc_reports"][key] = parser_func(str(filepath))
                     self.results["package_info"]["parsed_files"].append(filename)
@@ -185,8 +196,8 @@ class PackageParser:
 
     def _parse_raw_data(self):
         """Parse AD3103.TXT raw machine-readable records."""
-        filepath = self.package_dir / "AD3103.TXT"
-        if filepath.exists():
+        filepath = self._find_file("AD3103.TXT")
+        if filepath:
             try:
                 self.results["raw_data"]["ad3103"] = parse_ad3103(str(filepath))
                 self.results["package_info"]["parsed_files"].append("AD3103.TXT")

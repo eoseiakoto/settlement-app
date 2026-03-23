@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ArrowLeftRight, Building2, Receipt,
   Scale, FileBarChart, DollarSign, ChevronLeft, Menu, Upload,
-  X, CheckCircle, AlertCircle, Loader2, FolderOpen,
+  X, CheckCircle, AlertCircle, Loader2, FolderOpen, History,
 } from 'lucide-react';
 import { uploadPackage } from '../utils/api';
 
@@ -26,6 +26,7 @@ export default function Layout({ children, currentPackageDate, onUploadComplete 
     { path: '/reconciliation', icon: Scale, label: 'Reconciliation' },
     { path: '/control-reports', icon: FileBarChart, label: 'Control Reports' },
     { path: '/currency-rates', icon: DollarSign, label: 'Currency Rates' },
+    { path: '/upload-history', icon: History, label: 'Upload History' },
   ];
 
   const isActive = (path) => location.pathname === path;

@@ -85,7 +85,9 @@ def health():
 def list_packages():
     from storage import get_store
     store = get_store()
-    packages = store.get_packages()
+    from_date = request.args.get('from_date')
+    to_date = request.args.get('to_date')
+    packages = store.get_packages(from_date=from_date, to_date=to_date)
     return jsonify(packages)
 
 
@@ -98,6 +100,28 @@ def get_package(pkg_id):
         if p['id'] == pkg_id:
             return jsonify(p)
     return jsonify({'error': 'Package not found'}), 404
+
+
+@api.route('/packages/<int:pkg_id>', methods=['DELETE'])
+def delete_package(pkg_id):
+    """Delete a package and all its associated data."""
+    from storage import get_store
+    store = get_store()
+    result = store.delete_package(pkg_id)
+    if result['deleted']:
+        _refresh_data_store()
+        return jsonify(result)
+    return jsonify(result), 404
+
+
+@api.route('/admin/cleanup-duplicates', methods=['POST'])
+def cleanup_duplicates():
+    """Remove duplicate packages, keeping the earliest per fingerprint."""
+    from storage import get_store
+    store = get_store()
+    result = store.cleanup_duplicate_packages()
+    _refresh_data_store()
+    return jsonify(result)
 
 
 # ============================================================================
@@ -121,14 +145,30 @@ def upload_reports():
                 return jsonify({'error': 'No files provided'}), 400
 
             # Save uploaded files to a temp directory
+            # Skip files from known binary subdirectories (e.g. Dscb/)
             upload_dir = tempfile.mkdtemp(prefix='settleops_upload_')
             saved_files = []
             for f in files:
                 if f.filename:
+                    browser_path = f.filename.replace('\\', '/')
+                    if '/Dscb/' in browser_path or '/dscb/' in browser_path:
+                        continue
                     safe_name = os.path.basename(f.filename)
                     dest = os.path.join(upload_dir, safe_name)
                     f.save(dest)
                     saved_files.append(safe_name)
+
+            # Post-save validation: remove binary files (contain null bytes)
+            for fname in list(saved_files):
+                fpath = os.path.join(upload_dir, fname)
+                try:
+                    with open(fpath, 'rb') as check:
+                        chunk = check.read(512)
+                        if b'\x00' in chunk:
+                            os.remove(fpath)
+                            saved_files.remove(fname)
+                except Exception:
+                    pass
 
             if not saved_files:
                 shutil.rmtree(upload_dir, ignore_errors=True)

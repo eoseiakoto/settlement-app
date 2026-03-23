@@ -76,6 +76,24 @@ export function getPackages() {
   return apiCall('/packages');
 }
 
+export function getPackagesHistory(fromDate, toDate) {
+  const params = new URLSearchParams();
+  if (fromDate) params.set('from_date', fromDate);
+  if (toDate) params.set('to_date', toDate);
+  const qs = params.toString();
+  return apiCall(`/packages${qs ? '?' + qs : ''}`);
+}
+
+export function deletePackage(pkgId) {
+  return fetch(`${API_BASE}/packages/${pkgId}`, { method: 'DELETE' })
+    .then(res => { if (!res.ok) throw new Error('Delete failed'); return res.json(); });
+}
+
+export function cleanupDuplicates() {
+  return fetch(`${API_BASE}/admin/cleanup-duplicates`, { method: 'POST' })
+    .then(res => { if (!res.ok) throw new Error('Cleanup failed'); return res.json(); });
+}
+
 export function uploadPackage(formData) {
   return fetch(`${API_BASE}/upload`, {
     method: 'POST',

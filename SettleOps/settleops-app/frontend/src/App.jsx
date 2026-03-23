@@ -8,6 +8,7 @@ import Fees from './pages/Fees';
 import Reconciliation from './pages/Reconciliation';
 import ControlReports from './pages/ControlReports';
 import CurrencyRates from './pages/CurrencyRates';
+import UploadHistory from './pages/UploadHistory';
 import { getPackages } from './utils/api';
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
         <Route path="/reconciliation" element={<Reconciliation />} />
         <Route path="/control-reports" element={<ControlReports />} />
         <Route path="/currency-rates" element={<CurrencyRates />} />
+        <Route path="/upload-history" element={<UploadHistory />} />
       </Routes>
     </Layout>
   );
