@@ -4,7 +4,7 @@ Single-bank platform for ADB (Agricultural Development Bank, Ghana) that parses 
 
 ## Tech Stack
 
-- **Backend**: Python Flask 3.x + Flask-CORS, serves API + SPA on port 5000
+- **Backend**: Python Flask 3.x + Flask-CORS, serves API + SPA on port 5001
 - **Frontend**: React 19 + Vite 8 + Tailwind CSS v4 + Recharts + Lucide React icons
 - **Database**: SQLite (WAL mode) at `backend/data/settleops.db`
 - **No external Python deps** beyond Flask/Flask-CORS (parsers use stdlib only)
@@ -12,7 +12,7 @@ Single-bank platform for ADB (Agricultural Development Bank, Ghana) that parses 
 ## Quick Start
 
 ```bash
-cd backend && python app.py    # serves everything on http://localhost:5000
+cd backend && python app.py    # serves everything on http://localhost:5001
 ```
 
 ## Build Pipeline

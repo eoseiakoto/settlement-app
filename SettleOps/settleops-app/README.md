@@ -18,7 +18,7 @@ pip3 install -r requirements.txt
 python3 app.py
 ```
 
-Open **http://localhost:5000** in your browser.
+Open **http://localhost:5001** in your browser.
 
 The app auto-loads the March 2023 ADB data from `VSS_Reports/310323/` on startup.
 
@@ -85,7 +85,7 @@ cd settleops-app/frontend
 npm run dev
 ```
 
-The dev server runs on **http://localhost:5173** and proxies `/api/*` requests to Flask on port 5000.
+The dev server runs on **http://localhost:5173** and proxies `/api/*` requests to Flask on port 5001.
 
 ## API Endpoints
 

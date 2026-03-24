@@ -6,7 +6,7 @@
 #   ./start.sh                           # Uses default data path
 #   ./start.sh /path/to/VSS_Reports      # Custom data directory
 #
-# The app will be available at http://localhost:5000
+# The app will be available at http://localhost:5001
 
 cd "$(dirname "$0")/backend"
 
@@ -18,7 +18,7 @@ echo "  ADB - Agricultural Development Bank"
 echo "============================================"
 echo ""
 echo "Data directory: $DATA_DIR"
-echo "Starting server on http://localhost:5000"
+echo "Starting server on http://localhost:5001"
 echo ""
 
 python app.py
